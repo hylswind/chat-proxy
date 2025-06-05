@@ -1,0 +1,27 @@
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "4000:4000"
+    environment:
+      - LITELLM_MASTER_KEY=DUMMY_LITELLM_MASTER_KEY
+      - AWS_ACCESS_KEY_ID=DUMMY_AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=DUMMY_AWS_SECRET_ACCESS_KEY
+      - AWS_REGION_NAME=us-west-2
+      - NO_DOCS=true
+      - DISABLE_ADMIN_UI=true
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./plugins/custom_auth.py:/app/custom_auth.py
+      - ./plugins/custom_callbacks.py:/app/custom_callbacks.py
+    command: ["--config", "/app/config.yaml"]
+
+  # nginx:
+  #   image: nginx:stable
+  #   ports:
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./nginx/certs:/etc/nginx/certs:ro
+  #   depends_on:
+  #     - litellm

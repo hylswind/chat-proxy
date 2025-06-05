@@ -1,0 +1,25 @@
+model_list:
+  - model_name: bedrock-llama4-maverick-17b-instruct
+    litellm_params:
+      model: bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
+      litellm_credential_name: default_aws_credential
+
+  - model_name: bedrock-llama4-scout-17b-instruct
+    litellm_params:
+      model: bedrock/us.meta.llama4-scout-17b-instruct-v1:0
+      litellm_credential_name: default_aws_credential
+
+credential_list:
+  - credential_name: default_aws_credential
+    credential_values:
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+    credential_info:
+      description: "Production credentials"
+
+general_settings:
+  custom_auth: custom_auth.user_api_key_auth
+
+litellm_settings:
+  callbacks: custom_callbacks.proxy_handler_instance
