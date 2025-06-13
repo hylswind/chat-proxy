@@ -7,13 +7,17 @@ services:
       - LITELLM_MASTER_KEY=DUMMY_LITELLM_MASTER_KEY
       - AWS_ACCESS_KEY_ID=DUMMY_AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=DUMMY_AWS_SECRET_ACCESS_KEY
-      - AWS_REGION_NAME=us-west-2
+      - AWS_BEDROCK_REGION_NAME=us-west-2
+      - DYNAMODB_TABLE=DUMMY_DYNAMODB_TABLE
+      - DYNAMODB_REGION_NAME=DUMMY_DYNAMODB_REGION_NAME
+      - SQS_URL=DUMMY_SQS_URL
+      - SQS_REGION_NAME=DUMMY_SQS_REGION_NAME
       - NO_DOCS=true
       - DISABLE_ADMIN_UI=true
     volumes:
       - ./config.yaml:/app/config.yaml
-      - ./plugins/custom_auth.py:/app/custom_auth.py
-      - ./plugins/custom_callbacks.py:/app/custom_callbacks.py
+      - ./plugins/auth_handler.py:/app/auth_handler.py
+      - ./plugins/callback_handler.py:/app/callback_handler.py
     command: ["--config", "/app/config.yaml"]
 
   # nginx:
