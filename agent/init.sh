@@ -128,7 +128,7 @@ else
 fi
 
 # ----- INSTALL PYTHON DEPENDENCIES -----
-pip install -r "$(dirname "$0")/agent/requirements.txt"
+pip3 install -r "$(dirname "$0")/requirements.txt"
 
 # ----- SETUP SYSTEMD SERVICE -----
 SERVICE_NAME="agent-api"
@@ -142,7 +142,7 @@ Description=FastAPI Agent API Service
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 -m uvicorn agent:app --host 0.0.0.0 --port 8800 --workers 2
+ExecStart=/usr/bin/python3 -m uvicorn agent:app --host 0.0.0.0 --port 9900 --workers 2
 WorkingDirectory=$AGENT_PATH
 Restart=always
 RestartSec=5
@@ -154,6 +154,5 @@ WantedBy=multi-user.target
 EOF
 
 # Reload systemd, enable and start the service
-systemctl daemon-reexec
 systemctl daemon-reload
 systemctl enable --now "$SERVICE_NAME"
