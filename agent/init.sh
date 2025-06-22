@@ -127,8 +127,18 @@ else
     exit 1
 fi
 
+# ---- SETUP PYTHON VENV AND INSTALL DEPENDENCIES ----
+VENV_PATH="$(dirname "$0")/venv"
+PYTHON_BIN="$VENV_PATH/bin/python"
+UVICORN_BIN="$VENV_PATH/bin/uvicorn"
+PIP_BIN="$VENV_PATH/bin/pip"
+
+python3 -m venv "$VENV_PATH"
+$PIP_BIN install -r "$(dirname "$0")/requirements.txt"
+
 # ----- INSTALL PYTHON DEPENDENCIES -----
 # pip3 install -r "$(dirname "$0")/requirements.txt"
+
 
 # ----- SETUP SYSTEMD SERVICE -----
 # SERVICE_NAME="agent-api"
