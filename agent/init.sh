@@ -131,28 +131,28 @@ fi
 pip3 install -r "$(dirname "$0")/requirements.txt"
 
 # ----- SETUP SYSTEMD SERVICE -----
-SERVICE_NAME="agent-api"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-AGENT_PATH="$(realpath "$(dirname "$0")/agent")"
+# SERVICE_NAME="agent-api"
+# SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+# AGENT_PATH="$(realpath "$(dirname "$0")/agent")"
 
-cat > "$SERVICE_FILE" <<EOF
-[Unit]
-[Unit]
-Description=FastAPI Agent API Service
-After=network.target
+# cat > "$SERVICE_FILE" <<EOF
+# [Unit]
+# [Unit]
+# Description=FastAPI Agent API Service
+# After=network.target
 
-[Service]
-ExecStart=/usr/bin/python3 -m uvicorn agent:app --host 0.0.0.0 --port 9900 --workers 2
-WorkingDirectory=$AGENT_PATH
-Restart=always
-RestartSec=5
-User=root
-Environment=PYTHONUNBUFFERED=1
+# [Service]
+# ExecStart=/usr/bin/python3 -m uvicorn agent:app --host 0.0.0.0 --port 9900 --workers 2
+# WorkingDirectory=$AGENT_PATH
+# Restart=always
+# RestartSec=5
+# User=root
+# Environment=PYTHONUNBUFFERED=1
 
-[Install]
-WantedBy=multi-user.target
-EOF
+# [Install]
+# WantedBy=multi-user.target
+# EOF
 
-# Reload systemd, enable and start the service
-systemctl daemon-reload
-systemctl enable --now "$SERVICE_NAME"
+# # Reload systemd, enable and start the service
+# systemctl daemon-reload
+# systemctl enable --now "$SERVICE_NAME"
