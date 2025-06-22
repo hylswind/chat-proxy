@@ -128,7 +128,7 @@ else
 fi
 
 # ----- INSTALL PYTHON DEPENDENCIES -----
-pip3 install -r "$(dirname "$0")/requirements.txt"
+# pip3 install -r "$(dirname "$0")/requirements.txt"
 
 # ----- SETUP SYSTEMD SERVICE -----
 # SERVICE_NAME="agent-api"
