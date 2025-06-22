@@ -127,20 +127,6 @@ else
     shutdown -h now
 fi
 
-# ---- VERIFY REQUIRED FILES EXIST BEFORE STARTING API ----
-REQUIRED_FILES=(
-  "$RAMDISK_FOLDER/primary.key"
-  "$RAMDISK_FOLDER/https.key"
-  "$RAMDISK_FOLDER/https.cert"
-)
-
-for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$file" ]; then
-        echo "[ERROR] Required file not found: $file"
-        exit 1
-    fi
-done
-
 # ----- INSTALL PYTHON DEPENDENCIES -----
 pip install -r "$(dirname "$0")/agent/requirements.txt"
 
