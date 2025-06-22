@@ -124,7 +124,7 @@ elif [ "$AGENT_MODE" == "sync" ]; then
 # ----- UNKNOWN MODE -----
 else
     echo "Unknown AGENT_MODE: $AGENT_MODE"
-    shutdown -h now
+    exit 1
 fi
 
 # ----- INSTALL PYTHON DEPENDENCIES -----
