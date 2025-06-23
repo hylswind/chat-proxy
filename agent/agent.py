@@ -18,7 +18,8 @@ RAMDISK_ROOT_PATH = "/mnt/ramdisk"
 
 
 class PutCertBody(BaseModel):
-    cert: str
+    leafCert: str
+    intermediateCert: str
 
 
 class SyncKeyBody(BaseModel):
@@ -60,14 +61,22 @@ async def get_csr():
 @app.post("/put-cert")
 async def put_cert(body: PutCertBody):
     """Validates and stores the client certificate if it matches the private key."""
-    cert_pem = body.cert
+    leaf_cert_pem = body.leafCert
+    intermediate_cert_pem = body.intermediateCert
 
     key_path = Path(RAMDISK_ROOT_PATH) / "https.key"
     cert_path = Path(RAMDISK_ROOT_PATH) / "https.pem"
 
+    # Check if cert file already exists
+    if cert_path.exists():
+        raise HTTPException(
+            status_code=400, detail="Certificate file already exists"
+        )
+
     try:
         # Load the certificate and extract the public key
-        client_cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
+        client_cert = crypto.load_certificate(
+            crypto.FILETYPE_PEM, leaf_cert_pem)
         cert_pub_key = client_cert.get_pubkey().to_cryptography_key().public_bytes(
             serialization.Encoding.PEM,
             serialization.PublicFormat.SubjectPublicKeyInfo
@@ -86,7 +95,9 @@ async def put_cert(body: PutCertBody):
             raise HTTPException(
                 status_code=400, detail="Certificate does not match private key")
 
-        cert_path.write_text(cert_pem)
+        fullchain_pem = f"{leaf_cert_pem.strip()}\n{intermediate_cert_pem.strip()}\n"
+        cert_path.write_text(fullchain_pem)
+
         return {}
 
     except Exception as e:
