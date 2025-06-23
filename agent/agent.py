@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import padding
 
+
 RAMDISK_ROOT_PATH = "/mnt/ramdisk"
 
 
@@ -23,8 +24,10 @@ class PutCertBody(BaseModel):
 class SyncKeyBody(BaseModel):
     instanceID: str
     commPubKey: str
+    region: str
 
 
+# Check if the EC2 instance is registered with any target group
 def is_instance_in_any_target_group(elbv2_client, instance_id):
     paginator = elbv2_client.get_paginator("describe_target_groups")
     for page in paginator.paginate():
@@ -46,117 +49,125 @@ app = FastAPI()
 
 @app.get("/get-csr")
 async def get_csr():
+    """Returns the current CSR content from the RAM disk."""
     csr_path = Path(RAMDISK_ROOT_PATH) / "https.csr"
-    if not os.path.exists(csr_path):
+    if not csr_path.exists():
         raise HTTPException(status_code=500, detail="CSR file not found")
 
-    with open(csr_path, "r") as f:
-        csr_content = f.read()
-
-    return {"csr": csr_content}
+    return {"csr": csr_path.read_text()}
 
 
 @app.post("/put-cert")
 async def put_cert(body: PutCertBody):
-    params = body.model_dump()
+    """Validates and stores the client certificate if it matches the private key."""
+    cert_pem = body.cert
 
     key_path = Path(RAMDISK_ROOT_PATH) / "https.key"
     cert_path = Path(RAMDISK_ROOT_PATH) / "https.pem"
 
-    if not os.path.exists(key_path):
-        raise HTTPException(status_code=500, detail="Private key not found")
+    try:
+        # Load the certificate and extract the public key
+        client_cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
+        cert_pub_key = client_cert.get_pubkey().to_cryptography_key().public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo
+        )
 
-    client_cert = crypto.load_certificate(crypto.FILETYPE_PEM, params["cert"])
-    pub_from_cert = client_cert.get_pubkey().to_cryptography_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
-
-    with open(key_path, "rb") as f:
+        # Load private key and extract public portion
         private_key = serialization.load_pem_private_key(
-            f.read(), password=None, backend=default_backend())
-    pub_from_key = private_key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+            key_path.read_bytes(), password=None, backend=default_backend()
+        )
+        key_pub_key = private_key.public_key().public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo
+        )
 
-    if pub_from_cert != pub_from_key:
+        if cert_pub_key != key_pub_key:
+            raise HTTPException(
+                status_code=400, detail="Certificate does not match private key")
+
+        cert_path.write_text(cert_pem)
+        return {}
+
+    except Exception as e:
         raise HTTPException(
-            status_code=400, detail="Certificate does not match private key")
-
-    with open(cert_path, "w") as f:
-        f.write(params["cert"])
-
-    return ""
+            status_code=500, detail=f"Certificate validation failed")
 
 
 @app.post("/sync-key")
 async def sync_key(body: SyncKeyBody):
-    params = body.model_dump()
+    """
+    Verifies instance trust and returns:
+    - AES-encrypted primary key encrypted with the instance communication key
+    - Previously AES-encrypted HTTPS key
+    - PEM certificate
+    """
+    instance_id = body.instanceID
+    comm_pub_key_pem = body.commPubKey
+    region = body.region
 
-    ec2_client = boto3.client("ec2", region_name="us-east-1")
-    elbv2_client = boto3.client("elbv2", region_name="us-east-1")
+    # AWS clients
+    ec2_client = boto3.client("ec2", region_name=region)
+    elbv2_client = boto3.client("elbv2", region_name=region)
 
-    if not is_instance_in_any_target_group(elbv2_client, params["instanceID"]):
+    # Validate instance is in target group
+    if not is_instance_in_any_target_group(elbv2_client, instance_id):
         raise HTTPException(
             status_code=403, detail="Instance not in any target group")
 
+    # Extract COMM_PUB_KEY_HASH from instance console output
     try:
         output = ec2_client.get_console_output(
-            InstanceId=params["instanceID"], Latest=True)
-        content = output.get("Output", "")
-        match = re.search(r"COMM_PUB_KEY_HASH=([a-fA-F0-9]+)", content)
+            InstanceId=instance_id, Latest=True)
+        console_content = output.get("Output", "")
+        match = re.search(r"COMM_PUB_KEY_HASH=([a-fA-F0-9]+)", console_content)
 
         if not match:
             raise HTTPException(
                 status_code=400, detail="COMM_PUB_KEY_HASH not found")
-
         expected_hash = match.group(1)
-    except Exception as e:
-        print(str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to read console output")
 
-    try:
-        digest = hashlib.sha256(params["commPubKey"].encode()).hexdigest()
-        if digest != expected_hash:
+        # Verify the hash of the provided communication public key
+        actual_hash = hashlib.sha256(comm_pub_key_pem.encode()).hexdigest()
+        if actual_hash != expected_hash:
             raise HTTPException(
                 status_code=400, detail="Public key hash mismatch")
     except Exception as e:
         raise HTTPException(
-            status_code=400, detail=f"Public key hash check failed")
+            status_code=500, detail=f"Failed to validate instance console output")
 
+    # Encrypt the primary key using the communication public key
     try:
-        from cryptography.hazmat.primitives import serialization
-
         comm_pub_key = serialization.load_pem_public_key(
-            params["commPubKey"].encode(), backend=default_backend())
+            comm_pub_key_pem.encode(), backend=default_backend()
+        )
 
-        key_path = Path(RAMDISK_ROOT_PATH) / "primary.key"
-        with open(key_path, "rb") as f:
-            plaintext = f.read()
-
+        primary_key_path = Path(RAMDISK_ROOT_PATH) / "primary.key"
+        primary_plaintext = primary_key_path.read_bytes()
         encrypted_primary = comm_pub_key.encrypt(
-            plaintext,
-            padding=padding.OAEP(
+            primary_plaintext,
+            padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
                 label=None
             )
         )
     except Exception as e:
-        print(str(e))
         raise HTTPException(status_code=500, detail=f"Encryption failed")
 
+    # Load encrypted https key and certificate
     try:
         https_key_enc_path = Path(RAMDISK_ROOT_PATH) / "https.key.enc"
-        with open(https_key_enc_path, "rb") as f:
-            https_key_enc = f.read()
-
         https_cert_path = Path(RAMDISK_ROOT_PATH) / "https.pem"
-        with open(https_cert_path, "rb") as f:
-            https_cert = f.read()
+
+        https_key_enc = https_key_enc_path.read_bytes()
+        https_cert = https_cert_path.read_text()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read files")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to load encrypted files")
 
     return {
         "encPrimaryKey": base64.b64encode(encrypted_primary).decode(),
         "encHttpsKey": base64.b64encode(https_key_enc).decode(),
-        "httpsCert": https_cert.decode()
+        "httpsCert": https_cert
     }
